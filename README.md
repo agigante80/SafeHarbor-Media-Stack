@@ -310,21 +310,116 @@ curl http://localhost:9117
 curl http://localhost:9696
 ```
 
-### Monitoring Commands
+### 📊 VPN Status Monitoring
+
+The stack includes comprehensive VPN monitoring through Gluetun logs and the custom keepalive system:
+
+#### **Successful VPN Connection Logs**
+When everything is working correctly, you'll see logs similar to this:
+
+```log
+gluetun  | 2025-10-12T10:39:28Z INFO [firewall] allowing VPN connection...
+gluetun  | 2025-10-12T10:39:29Z INFO [openvpn] OpenVPN 2.6.11 x86_64-alpine-linux-musl
+gluetun  | 2025-10-12T10:39:29Z INFO [openvpn] [PrivateVPN] Peer Connection Initiated with [AF_INET]91.236.55.255:1194
+gluetun  | 2025-10-12T10:39:30Z INFO [openvpn] Initialization Sequence Completed
+gluetun  | 2025-10-12T10:39:31Z INFO [healthcheck] healthy!
+gluetun  | 2025-10-12T10:39:50Z INFO [ip getter] Public IP address is 185.170.104.53 (Poland, Kujawsko-Pomorskie, Toruń - source: ipinfo)
+gluetun  | 2025-10-12T10:40:16Z INFO [dns] DNS server listening on [::]:53
+gluetun  | 2025-10-12T10:40:16Z INFO [dns] ready
+```
+
+**Key Indicators of Successful VPN Connection:**
+- ✅ **Firewall**: `allowing VPN connection...`
+- ✅ **OpenVPN**: `Initialization Sequence Completed`
+- ✅ **Health Check**: `healthy!` (appears regularly)
+- ✅ **Public IP**: Shows VPN server location (e.g., `185.170.104.53 (Poland, Toruń)`)
+- ✅ **DNS Server**: `DNS server listening` and `ready`
+
+#### **VPN Monitoring Commands**
 ```bash
-# Check VPN status and external IP
+# Check current VPN status and external IP
 docker exec gluetun wget -qO- https://ipinfo.io/ip
+# Expected: VPN server IP (e.g., 185.170.104.53)
+
+# Get detailed location information
+docker exec gluetun wget -qO- https://ipinfo.io/json
+# Shows: IP, city, region, country, org, timezone
 
 # DNS leak test (should show VPN DNS servers)
 docker exec gluetun nslookup google.com
-docker exec gluetun wget -qO- https://www.dnsleaktest.com/
+docker exec gluetun wget -qO- https://1.1.1.1/cdn-cgi/trace
 
-# Verify container connectivity
+# Verify container connectivity through VPN
 docker exec qbittorrent curl -s http://localhost:9117
+docker exec sonarr curl -s https://ipinfo.io/ip
 
-# View keepalive logs
-docker logs keepalive-server
-docker logs keepalive-client
+# View real-time VPN logs
+docker logs gluetun --follow
+
+# Check VPN health status
+docker exec gluetun wget -qO- http://localhost:9999/health
+```
+
+#### **DNS Leak Detection Testing**
+Your stack includes automated DNS leak detection. Test it manually:
+
+```bash
+# Method 1: Compare VPN IP location with DNS resolver location
+VPN_COUNTRY=$(docker exec gluetun wget -qO- https://ipinfo.io/json | grep country | cut -d'"' -f4)
+DNS_COUNTRY=$(docker exec gluetun wget -qO- https://1.1.1.1/cdn-cgi/trace | grep '^loc=' | cut -d'=' -f2)
+echo "VPN Country: $VPN_COUNTRY, DNS Country: $DNS_COUNTRY"
+# Should match if no leak (e.g., both show "PL" for Poland)
+
+# Method 2: Check DNS servers being used
+docker exec gluetun cat /etc/resolv.conf
+# Should show: nameserver 127.0.0.1 (Gluetun's DNS server)
+
+# Method 3: Test external DNS leak detection services
+docker exec gluetun wget -qO- "https://bash.ws/dnsleak"
+```
+
+#### **Keepalive System Status**
+Monitor the custom keepalive system that provides Telegram notifications:
+
+```bash
+# View keepalive client logs (runs inside VPN)
+docker logs keepalive-client --tail 20
+
+# Expected successful output:
+# ✅ Keepalive sent successfully at [timestamp]
+#    📍 Location: Toruń, Kujawsko-Pomorskie, PL
+#    🌐 VPN IP: 185.170.104.53
+#    🔒 DNS: PL (WAW) - No leak detected
+
+# View keepalive server logs (isolated network)
+docker logs keepalive-server --tail 20
+
+# Check server status endpoint
+curl -s http://localhost:5421/status | jq
+```
+
+### **🚨 Warning Signs to Watch For**
+
+❌ **VPN Connection Issues:**
+```log
+gluetun  | ERROR [openvpn] authentication failed
+gluetun  | ERROR [firewall] cannot allow VPN connection
+gluetun  | WARN [healthcheck] unhealthy!
+```
+
+❌ **DNS Leak Indicators:**
+```bash
+# If this shows your real IP instead of VPN IP:
+docker exec qbittorrent curl -s https://ipinfo.io/ip
+
+# If countries don't match:
+VPN: "ES" (Spain), DNS: "US" (United States) = LEAK DETECTED!
+```
+
+❌ **Network Isolation Failures:**
+```log
+keepalive-client | ❌ Failed to send keepalive
+keepalive-client | 📍 Location: Unknown, Unknown, Unknown
 ```
 
 ### Troubleshooting
