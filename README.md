@@ -1,13 +1,70 @@
 # SafeHarbor Media Stack 🎬🔒
 *Secure Docker Stack for VPN-Protected Media Management*
 
-A complete Docker Compose setup for automated media management with VPN protection, featuring popular *arr applications, qBittorrent, and intelligent monitoring with Telegram notifications.
+A complete Docker Compose setu## 🔧 **Standalone Keepalive + Telegram Deployment**
+
+> **Add SafeHarbor's dual monitoring system (keepalive + Telegram) to ANY Docker VPN setup!**
+
+The complete **keepalive client/server + Telegram notification system** can be deployed independently to monitor **any** VPN-protected container stack: automated media management with VPN protection, featuring popular *arr applications, qBittorrent, and intelligent monitoring with Telegram notifications.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Docker](https://img.shields.io/badge/Docker-Compose-blue)](https://docs.docker.com/compose/)
 [![VPN](https://img.shields.io/badge/VPN-Gluetun-green)](https://github.com/qdm12/gluetun)
 
-## ✨ Key Features
+## 🚨 **UNIQUE: Live Telegram Monitoring & Notification System**
+
+> **🔥 What sets SafeHarbor apart:** Our **unique combination of keepalive client/server monitoring + live Telegram notifications** creates a bulletproof system that detects VPN issues and instantly alerts you - something no other media stack offers.
+
+### 🎯 **Keepalive + Telegram: The Powerful Combination**
+
+**⚡ The SafeHarbor Advantage - Two Systems Working as One:**
+
+**� Keepalive Client/Server System:**
+- **Inside VPN monitoring** - Client monitors connection health from within protected network
+- **Outside VPN reporting** - Server receives status reports from real IP network
+- **Continuous health checks** - 5-minute intervals with instant failure detection
+- **DNS leak detection** - Verifies your real IP is never exposed
+
+**📱 Telegram Notification System:**
+- **Instant mobile alerts** - Get notified on your phone within seconds of any issue
+- **Interactive bot commands** - `/ping`, `/status`, `/help` for remote monitoring
+- **Smart log analysis** - Bot analyzes container logs and provides meaningful alerts
+- **Real-time status updates** - Continuous reporting directly to your Telegram
+
+**🚀 Why The Combination is Unstoppable:**
+- **Keepalive detects issues** → **Telegram instantly notifies you**
+- **Technical monitoring** + **Human-friendly notifications** = **Complete solution**
+- **Works independently** - Can be deployed with ANY Docker VPN stack
+
+**🛡️ Advanced Protection & Notification Features:**
+- **DNS leak detection** with instant Telegram alerts
+- **Real-time monitoring** - 5-minute interval checks with live notifications
+- **VPN failure alerts** - Immediate Telegram messages when connection drops
+- **IP change notifications** - Get notified instantly if your VPN IP changes
+- **Interactive commands** - Check system status remotely via Telegram
+- **Log analysis alerts** - Smart detection of issues from container logs
+- **API endpoints** - `/status`, `/health` for integration with external systems
+
+**💡 Why The Keepalive + Telegram Combination is Game-Changing:**
+Most VPN stacks fail silently, leaving you exposed without knowing. SafeHarbor's **dual-system approach** means:
+
+**🔍 Keepalive Client/Server detects:**
+- VPN connection failures within the protected network
+- DNS leaks that expose your real IP
+- Container networking issues
+- Performance degradation
+
+**📱 Telegram System instantly alerts you:**
+- VPN connection drops (get alert within seconds)
+- IP address changes unexpectedly (real-time notification)  
+- DNS queries leak your real location (immediate warning)
+- Container networking fails (instant troubleshooting info)
+- Downloads complete or fail (progress updates)
+- System resources run low (proactive alerts)
+
+**🎯 Result: Technical monitoring + Human notifications = Never be caught off-guard**
+
+## ✨ Complete Feature Set
 
 - **🔒 VPN Protection**: All media traffic routed through Gluetun VPN (25+ providers supported)
 - **📺 Complete Media Stack**: Sonarr, Radarr, Readarr, Prowlarr, Jackett, Bazarr, qBittorrent
@@ -81,38 +138,112 @@ TELEGRAM_CHAT_ID=your_chat_id
 
 **Bot Commands**: `/ping`, `/status`, `/help`
 
-## 🛡️ VPN & Security
+## � **Standalone Keepalive Deployment**
 
-### How It Works
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Host Network                             │
-│  ┌─────────────────────────────────────────────────────────┐│
-│  │                 Gluetun VPN Gateway                     ││
-│  │  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐        ││
-│  │  │qBittorr │ │ Sonarr  │ │ Radarr  │ │ Jackett │ ...    ││
-│  │  │   ent   │ │         │ │         │ │         │        ││
-│  │  └─────────┘ └─────────┘ └─────────┘ └─────────┘        ││
-│  │                                                         ││
-│  │  ┌─────────────────────────────────────────────────┐    ││
-│  │  │              Keepalive Client                   │    ││
-│  │  │            (VPN Status Monitor)                 │    ││
-│  │  └─────────────────────────────────────────────────┘    ││
-│  └─────────────────────────────────────────────────────────┘│
-│                           │                                 │
-│                           │ Internet (via VPN)              │
-│                           │                                 │
-│                           │  ┌─────────────────────────┐    │
-│                           │  │     Keepalive Server    │    │
-│                           └─►│  (Real IP + Telegram)   │    │
-│                              │     Network Monitor     │    │
-│                              └─────────────────────────┘    │
-└─────────────────────────────────────────────────────────────┘
+> **Use SafeHarbor's monitoring system with ANY Docker VPN setup!**
+
+The keepalive client/server can be deployed independently to monitor **any** VPN-protected container stack:
+
+### Quick Standalone Setup
+```bash
+# Option 1: Use only the monitoring components
+version: '3.8'
+services:
+  # Your existing VPN container (gluetun, transmission-vpn, etc.)
+  your-vpn-container:
+    # ... your VPN config ...
+
+  # Add SafeHarbor's dual monitoring system
+  # Part 1: Keepalive Server (receives reports + sends Telegram alerts)
+  keepalive-server:
+    image: safeharbor/keepalive-server:latest
+    environment:
+      - TELEGRAM_BOT_TOKEN=your_bot_token      # Telegram integration
+      - TELEGRAM_CHAT_ID=your_chat_id          # Your notifications
+      - KEEPALIVE_API_KEY=your-secure-key      # Secure communication
+    ports:
+      - "5421:5421"
+
+  # Part 2: Keepalive Client (monitors from inside VPN)
+  keepalive-client:
+    image: safeharbor/keepalive-client:latest
+    environment:
+      - KEEPALIVE_SERVER_URL=http://keepalive-server:5421
+      - KEEPALIVE_API_KEY=your-secure-key
+    network_mode: "container:your-vpn-container"  # Monitor VPN from inside
+    depends_on:
+      - your-vpn-container
 ```
 
-- **All media containers** route through VPN
-- **Monitoring system** tracks VPN status and detects DNS leaks
-- **Automatic alerts** via Telegram when VPN fails or IP changes
+### Integration Benefits - The Power of Both Systems
+- **Complete monitoring ecosystem** - Keepalive detection + Telegram notifications
+- **Drop-in deployment** for existing setups with zero configuration changes
+- **Universal VPN support** - works with any VPN container (gluetun, transmission-vpn, etc.)
+- **Dual-layer protection** - Technical monitoring + human alerts
+- **Instant mobile notifications** - Never miss a VPN failure
+- **Interactive remote control** - `/ping`, `/status`, `/help` commands
+- **Lightweight yet powerful** - minimal resources, maximum protection
+- **Production ready** - battle-tested combination in SafeHarbor deployments
+
+## �🛡️ VPN & Security
+
+### SafeHarbor Architecture - Keepalive + Telegram Working Together
+```
+┌──────────────────────────────────────────────────────────────┐
+│                    Host Network                              │
+│  ┌──────────────────────────────────────────────────────────┐│
+│  │            🔒 Gluetun VPN Gateway (Protected)            ││
+│  │  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐         ││
+│  │  │qBittorr │ │ Sonarr  │ │ Radarr  │ │ Jackett │ ...     ││
+│  │  │   ent   │ │         │ │         │ │         │         ││
+│  │  └─────────┘ └─────────┘ └─────────┘ └─────────┘         ││
+│  │                                                          ││
+│  │  ┌──────────────────────────────────────────────────┐    ││
+│  │  │    🚨 KEEPALIVE CLIENT (SafeHarbor Secret Sauce) │    ││
+│  │  │  • DNS Leak Detection  • IP Change Monitoring    │    ││
+│  │  │  • Connection Testing  • Health Status Reports   │    ││
+│  │  └──────────────────────────────────────────────────┘    ││
+│  └──────────────────────────────────────────────────────────┘│
+│                           │                                  │
+│                ⚡ SECURE REPORTING TUNNEL                     │
+│                           │                                  │
+│  ┌──────────────────────────────────────────────────────────┐│
+│  │  🌐 KEEPALIVE SERVER (Real IP Network) 🌐                ││
+│  │                                                          ││
+│  │  ┌─────────────────┐    ┌──────────────────┐             ││
+│  │  │  📱 Telegram    │    │  📊 Status API   │             ││
+│  │  │  Bot Server     │◄───┤  /status /health │             ││
+│  │  │  (Instant       │    │  /api/vpn-check  │             ││
+│  │  │   Alerts)       │    └──────────────────┘             ││
+│  │  └─────────────────┘                                     ││
+│  │           ▲                                              ││
+│  │           │ Status Reports Every 5min                    ││
+│  │           │ + Instant Failure Alerts                     ││
+│  └───────────┼──────────────────────────────────────────────┘│
+│              │                                               │
+└──────────────┼───────────────────────────────────────────────┘
+               │ Internet (Real IP)
+               └─ Receives health reports from VPN network
+```
+
+**🔥 SafeHarbor's Unique Dual-System Architecture:**
+
+**🔧 Keepalive System (Technical Layer):**
+- **Inside VPN**: Client monitors connection health from protected environment
+- **Outside VPN**: Server receives reports and coordinates responses
+- **Continuous Detection**: DNS leak protection, IP monitoring, connection testing
+- **API Endpoints**: `/status`, `/health` for external system integration
+
+**📱 Telegram System (Human Layer):**
+- **Instant Mobile Notifications**: Get alerts directly on your phone within seconds
+- **Interactive Commands**: Remote control via `/ping`, `/status`, `/help`
+- **Smart Log Analysis**: Bot analyzes container logs and provides meaningful alerts
+- **Real-time Updates**: Continuous status reporting and failure notifications
+
+**⚡ The Magic Happens When They Work Together:**
+- **Keepalive detects** → **Telegram notifies** → **You respond instantly**
+- **Technical precision** + **Human accessibility** = **Bulletproof protection**
+- **Never miss a failure** - dual-layer monitoring with mobile alerts
 
 ## 🐛 Quick Troubleshooting
 
@@ -156,9 +287,24 @@ For detailed documentation, troubleshooting, and advanced configuration:
 - **[Architecture](../../wiki/Architecture)** - Technical deep-dive and networking
 - **[Synology Guide](../../wiki/Synology-Guide)** - NAS-specific instructions
 
-## 🌊 Alternative Projects
+## 🥊 **SafeHarbor vs. Other Media Stacks**
+
+| Feature | SafeHarbor | Other Stacks | Advantage |
+|---------|------------|--------------|-----------|
+| **Keepalive + Telegram Combo** | ✅ Dual-system monitoring | ❌ No integrated solution | **Technical detection + Human alerts** |
+| **Live Mobile Notifications** | ✅ Instant Telegram alerts | ❌ Silent failures | **Never miss VPN issues** |
+| **Interactive Bot Commands** | ✅ `/ping`, `/status`, `/help` | ❌ No remote control | **Monitor & control anywhere** |
+| **Dual-Network Monitoring** | ✅ Inside + outside VPN checks | ❌ Single network only | **Redundant failure detection** |
+| **DNS Leak Protection** | ✅ Active monitoring + alerts | ❌ Hope for the best | **Verified IP protection** |
+| **Smart Log Analysis** | ✅ Bot analyzes container logs | ❌ Manual log checking | **Proactive issue detection** |
+| **Complete Standalone System** | ✅ Both systems work independently | ❌ All-or-nothing approach | **Flexible deployment** |
+| **API Integration** | ✅ `/status`, `/health`, `/api/*` | ❌ Limited monitoring | **External system integration** |
+| **Instant Failure Response** | ✅ Detect → Alert → Act pipeline | ❌ Manual discovery | **Immediate incident response** |
+
+### 🌊 Alternative Projects
 - [navilg/media-stack](https://github.com/navilg/media-stack) - Complete media server with Plex
 - [DonMcD/ultimate-plex-stack](https://github.com/DonMcD/ultimate-plex-stack) - Ultimate Plex stack
+- **SafeHarbor difference**: These stacks focus on media management. SafeHarbor adds a **revolutionary keepalive + Telegram notification system** that creates bulletproof VPN monitoring with instant mobile alerts - a combination no other stack offers.
 
 ## ⚠️ Important Notice
 
