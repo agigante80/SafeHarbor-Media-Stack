@@ -141,13 +141,7 @@ TZ=Europe/Madrid
 
 ### Step 4: Directory Structure Setup
 
-#### Automatic Setup (Recommended)
-```bash
-# Create all required directories
-./setup-directories.sh
-```
-
-#### Manual Setup
+#### Create Required Directories
 ```bash
 # Create base directories
 mkdir -p gluetun
