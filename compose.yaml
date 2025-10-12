@@ -1,0 +1,315 @@
+# SafeHarbor Media Stack - Docker Compose Configuration
+# 
+# This setup provides a complete VPN-protected media automation stack:
+# - All media containers route traffic through VPN (Gluetun)
+# - External access via mapped ports on host network
+# - Internal container communication via localhost (shared network stack)
+# - Isolated monitoring system with Telegram notifications
+# - Synology NAS compatible configuration
+#
+# Prerequisites:
+# 1. Copy .env.example to .env and configure your values
+# 2. Ensure Docker and Docker Compose are installed
+# 3. Configure VPN provider credentials in .env file
+# 4. Set up Telegram bot (optional) for monitoring
+# 5. Ensure volume directories exist with proper permissions
+#
+# External Access Ports:
+# - qBittorrent:  http://YOUR_SERVER_IP:9802
+# - Jackett:      http://YOUR_SERVER_IP:9803  
+# - Sonarr:       http://YOUR_SERVER_IP:9804
+# - Prowlarr:     http://YOUR_SERVER_IP:9805
+# - FlareSolverr: http://YOUR_SERVER_IP:9806
+# - Readarr:      http://YOUR_SERVER_IP:9808
+# - Radarr:       http://YOUR_SERVER_IP:9809
+# - Bazarr:       http://YOUR_SERVER_IP:9810
+# - Radarr_ES:    http://YOUR_SERVER_IP:9811
+# - Keepalive:    http://YOUR_SERVER_IP:5421
+
+version: "3"
+
+services:
+  # =============================================================================
+  # VPN GATEWAY - All media traffic routes through this container
+  # =============================================================================
+  gluetun:
+    image: qmcgaw/gluetun
+    container_name: gluetun
+    cap_add:
+      - NET_ADMIN  # Required for VPN tunnel creation
+    devices:
+      - /dev/net/tun:/dev/net/tun  # TUN device for VPN tunnel
+    ports:
+      # BitTorrent ports for qBittorrent
+      - 9801:6881      # qBittorrent TCP port
+      - 9801:6881/udp  # qBittorrent UDP port
+      # Media application web interfaces (external:internal)
+      - 9802:8085      # qBittorrent WebUI
+      - 9803:9117      # Jackett indexer proxy
+      - 9804:8989      # Sonarr TV shows management
+      - 9805:9696      # Prowlarr indexer manager  
+      - 9806:8191      # FlareSolverr Cloudflare bypass
+      - 9808:8787      # Readarr books management
+      - 9809:7878      # Radarr movies management
+      - 9810:6767      # Bazarr subtitles management
+      - 9811:7879      # Radarr_ES Spanish movies instance
+    volumes:
+      - ${VOLUME_DOCKER_PROJECT}/gluetun:/gluetun  # VPN config and logs
+    environment:
+      # VPN Provider Configuration (from .env file)
+      - UPDATER_PERIOD=${UPDATER_PERIOD}              # How often to check for updates
+      - VPN_SERVICE_PROVIDER=${VPN_SERVICE_PROVIDER}  # VPN provider name
+      - SERVER_COUNTRIES=${SERVER_COUNTRIES}          # Preferred server countries
+      - OPENVPN_USER=${VPN_USER}                      # VPN username
+      - OPENVPN_PASSWORD=${VPN_PASSWORD}              # VPN password
+      # Network Configuration
+      - FIREWALL_OUTBOUND_SUBNETS=10.50.0.0/16,10.51.0.0/16  # Allow internal communication
+    networks:
+      - media-internal  # Connected to internal network for monitoring
+    restart: always
+
+  # =============================================================================
+  # MEDIA STACK - All containers share Gluetun's VPN network
+  # =============================================================================
+  
+  # BitTorrent Download Client
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent
+    container_name: qbittorrent
+    environment:
+      - PUID=${PUID_MEDIA}       # User ID for file permissions
+      - PGID=${PGID_MEDIA}       # Group ID for file permissions
+      - TZ=${TZ}                 # Timezone setting
+      - WEBUI_PORT=8085          # Internal web interface port
+    volumes:
+      - ${VOLUME_DOCKER_PROJECT}/qbittorrent/config:/config  # Configuration storage
+      - ${VOLUME_DOWNLOADS}:/downloads                       # Completed downloads
+      - ${VOLUME_INCOMPLETE}:/incomplete                     # Incomplete downloads
+    network_mode: service:gluetun  # Share Gluetun's VPN network stack
+    depends_on:
+      - gluetun
+    restart: unless-stopped
+
+  # Cloudflare Bypass Service
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    container_name: flaresolverr
+    environment:
+      - PUID=${PUID_MEDIA}      # User ID for file permissions
+      - PGID=${PGID_MEDIA}      # Group ID for file permissions
+      - TZ=${TZ}                # Timezone setting
+      - TEST_URL=${TEST_URL}    # URL for connectivity testing
+      - LANG=${LANG}            # Language setting
+    network_mode: service:gluetun  # Share Gluetun's VPN network stack
+    depends_on:
+      - gluetun
+    restart: unless-stopped
+
+  # Torrent Indexer Proxy
+  jackett:
+    image: lscr.io/linuxserver/jackett:latest
+    container_name: jackett
+    environment:
+      - PUID=${PUID_MEDIA}
+      - PGID=${PGID_MEDIA}
+      - TZ=${TZ}
+      - AUTO_UPDATE=true
+      - RUN_OPTS=
+    volumes:
+      - ${VOLUME_DOCKER_PROJECT}/jackett/config:/config
+      - ${VOLUME_DOCKER_PROJECT}/jackett/downloads:/downloads
+    network_mode: service:gluetun
+    depends_on:
+      - gluetun
+      - flaresolverr
+    restart: unless-stopped
+
+  # Indexer Manager (Modern Jackett Alternative)
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:latest
+    container_name: prowlarr
+    environment:
+      - PUID=${PUID_MEDIA}
+      - PGID=${PGID_MEDIA}
+      - TZ=${TZ}
+    volumes:
+      - ${VOLUME_DOCKER_PROJECT}/prowlarr/config:/config
+    network_mode: service:gluetun
+    depends_on:
+      - gluetun
+    restart: unless-stopped
+
+  # TV Show Automation (*arr Applications)
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:latest
+    container_name: sonarr
+    environment:
+      - PUID=${PUID_MEDIA}
+      - PGID=${PGID_MEDIA}
+      - TZ=${TZ}
+    volumes:
+      - ${VOLUME_DOCKER_PROJECT}/sonarr/config:/config
+      - ${VOLUME_DOWNLOADS}:/downloads
+      - ${VOLUME_MEDIA}:/media/media
+    network_mode: service:gluetun
+    depends_on:
+      - gluetun
+    restart: unless-stopped
+
+  # Movie Automation
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    container_name: radarr
+    environment:
+      - PUID=${PUID_MEDIA}
+      - PGID=${PGID_MEDIA}
+      - TZ=${TZ}
+    volumes:
+      - ${VOLUME_DOCKER_PROJECT}/radarr/config:/config
+      - ${VOLUME_DOWNLOADS}:/downloads
+      - ${VOLUME_MEDIA}:/media/media
+    network_mode: service:gluetun
+    depends_on:
+      - gluetun
+    restart: unless-stopped
+
+  # Book and Audiobook Automation  
+  readarr:
+    image: lscr.io/linuxserver/readarr:develop
+    container_name: readarr
+    environment:
+      - PUID=${PUID_MEDIA}
+      - PGID=${PGID_MEDIA}
+      - TZ=${TZ}
+    volumes:
+      - ${VOLUME_DOCKER_PROJECT}/readarr/config:/config
+      - ${VOLUME_DOWNLOADS}:/downloads
+      - ${VOLUME_EBOOKS}:/ebooks
+      - ${VOLUME_AUDIOBOOKS}:/audiobooks
+      - ${VOLUME_IMPORT}:/ImportFolder
+      - ${VOLUME_AUDIOBOOKSHELF}:/audiobookshelf
+    network_mode: service:gluetun
+    depends_on:
+      - gluetun
+    restart: unless-stopped
+
+  # Subtitle Automation
+  bazarr:
+    image: lscr.io/linuxserver/bazarr:development
+    container_name: bazarr
+    environment:
+      - PUID=${PUID_MEDIA}
+      - PGID=${PGID_MEDIA}
+      - TZ=${TZ}
+    volumes:
+      - ${VOLUME_DOCKER_PROJECT}/bazarr/config:/config
+      - ${VOLUME_MEDIA}:/media/media
+    network_mode: service:gluetun
+    depends_on:
+      - gluetun
+    restart: unless-stopped
+
+  # Spanish Movie Automation (Separate Instance)
+  radarr_es:
+    image: lscr.io/linuxserver/radarr:latest
+    container_name: radarr_es
+    environment:
+      - PUID=${PUID_MEDIA}
+      - PGID=${PGID_MEDIA}
+      - TZ=${TZ}
+    volumes:
+      - ${VOLUME_DOCKER_PROJECT}/radarr_ES/config:/config
+      - ${VOLUME_DOWNLOADS}:/downloads
+      - ${VOLUME_MEDIA}:/media/media
+    network_mode: service:gluetun
+    depends_on:
+      - gluetun
+    restart: unless-stopped
+
+  # =============================================================================
+  # VPN MONITORING SYSTEM - Telegram notifications for VPN status
+  # =============================================================================
+  
+  # VPN Status Monitor Client (routes through VPN)
+  keepalive-client:
+    image: curlimages/curl:latest
+    container_name: keepalive-client
+    environment:
+      - KEEPALIVE_SERVER_URL=${KEEPALIVE_SERVER_URL}  # URL to reach monitoring server
+      - KEEPALIVE_CLIENT_ID=${KEEPALIVE_CLIENT_ID}    # Unique client identifier
+      - KEEPALIVE_API_KEY=${KEEPALIVE_API_KEY}        # API key for authentication
+      - TZ=${TZ}                                      # Timezone setting
+    volumes:
+      - ./keepalive-client/keepalive.sh:/tmp/keepalive.sh:ro  # Monitoring script
+    # DNS configuration for leak testing 
+    # To test DNS leak detection, uncomment the lines below:
+    # dns:
+    #   - 8.8.8.8          # Google DNS (US) - will cause DNS leak
+    #   - 8.8.4.4          # Google DNS (US) - will cause DNS leak
+    #   # Alternative test DNS servers:
+    #   # - 1.1.1.1        # Cloudflare DNS (may show different location)
+    #   # - 208.67.222.222 # OpenDNS (US-based)
+    #   # - 9.9.9.9        # Quad9 DNS (various locations)
+    network_mode: service:gluetun  # Routes through VPN to test connectivity
+    command: >
+      sh -c "
+      sleep 30 &&
+      echo 'Waiting for VPN connection...' &&
+      sleep 30 &&
+      echo 'Setting up keepalive script...' &&
+      mkdir -p /home/curl_user &&
+      cp /tmp/keepalive.sh /home/curl_user/keepalive.sh &&
+      chmod +x /home/curl_user/keepalive.sh &&
+      echo 'Starting keepalive client...' &&
+      exec /home/curl_user/keepalive.sh
+      "
+    depends_on:
+      - gluetun           # Needs VPN gateway
+      - keepalive-server  # Needs monitoring server
+    restart: unless-stopped
+
+  # VPN Status Monitor Server (isolated - uses real IP for Telegram)
+  keepalive-server:
+    image: python:3.11-alpine
+    container_name: keepalive-server
+    ports:
+      - "5421:5000"  # External access for monitoring API
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}          # Telegram bot token for notifications
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}              # Your Telegram chat ID
+      - KEEPALIVE_API_KEY=${KEEPALIVE_API_KEY}            # API key for security
+      - MAX_REQUESTS_PER_MINUTE=${MAX_REQUESTS_PER_MINUTE} # Rate limiting setting
+      - TZ=${TZ}                                          # Timezone setting
+    volumes:
+      - ./keepalive-server/keepalive-server.py:/app/keepalive-server.py:ro  # Server script
+    working_dir: /app
+    networks:
+      - keepalive-isolated  # Isolated network (bypasses VPN)
+    command: >
+      sh -c "
+      pip install flask requests pytz &&
+      python keepalive-server.py
+      "
+    restart: unless-stopped
+
+# =============================================================================
+# NETWORK CONFIGURATION - Custom networks for proper isolation
+# =============================================================================
+networks:
+  # Internal network for Gluetun VPN gateway
+  # Used for communication between VPN container and monitoring
+  media-internal:
+    driver: bridge
+    name: media-internal
+    ipam:
+      config:
+        - subnet: 10.50.0.0/16  # Internal subnet for media services
+  
+  # Isolated network for monitoring server
+  # Bypasses VPN to send Telegram notifications via real IP  
+  keepalive-isolated:
+    driver: bridge
+    name: keepalive-isolated  
+    ipam:
+      config:
+        - subnet: 10.51.0.0/16  # Isolated subnet for monitoring
