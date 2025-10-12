@@ -818,6 +818,9 @@ def handle_telegram_commands():
                             handle_status_command()
                         elif text.startswith('/help'):
                             handle_help_command()
+                        else:
+                            # Handle unknown commands and regular text
+                            handle_unknown_command(text)
             
         except Exception as e:
             timestamp = get_current_time().strftime('%Y-%m-%d %H:%M:%S %Z')
@@ -886,6 +889,20 @@ def handle_help_command():
     if send_telegram_message(message):
         timestamp = get_current_time().strftime('%Y-%m-%d %H:%M:%S %Z')
         print(f"[{timestamp}] ✅ Help response sent", flush=True)
+
+def handle_unknown_command(text):
+    """Handle unknown commands and regular text messages"""
+    message = f"👋 <b>Hello!</b> I'm your VPN monitoring bot.\n\n"
+    message += f"I received: <code>{text}</code>\n\n"
+    message += f"Use <code>/help</code> to see available commands.\n\n"
+    message += f"Available commands:\n"
+    message += f"🏓 <code>/ping</code> - Test connectivity\n"
+    message += f"📊 <code>/status</code> - Get VPN status\n"
+    message += f"❓ <code>/help</code> - Show help"
+    
+    if send_telegram_message(message):
+        timestamp = get_current_time().strftime('%Y-%m-%d %H:%M:%S %Z')
+        print(f"[{timestamp}] ✅ Unknown command response sent for: {text}", flush=True)
 
 if __name__ == '__main__':
     server_start_time = get_current_time()

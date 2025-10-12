@@ -297,6 +297,53 @@ Connected since: 2 hours 15 minutes
 Last check: 30 seconds ago
 ```
 
+### 🤖 Telegram Bot Commands
+
+The keepalive server includes an interactive Telegram bot with the following commands:
+
+| Command | Description | Response |
+|---------|-------------|----------|
+| `/help` | Show available commands | Complete command list with descriptions |
+| `/status` | Get current VPN status | Detailed status report with IP, location, and uptime |
+| `/ping` | Test bot connectivity | Simple "Pong!" response to verify bot is working |
+| **Other text** | Any other text or commands | Friendly response with guidance to use /help |
+
+**Example Bot Interactions:**
+```
+User: /help
+Bot: 🤖 VPN Media Stack Bot Commands:
+     /status - Get current VPN status
+     /ping - Test bot connectivity  
+     /help - Show this help message
+
+User: /status
+Bot: 📊 VPN STATUS REPORT 📊
+     Client: synology-vpn-media
+     Status: ✅ CONNECTED
+     External IP: 185.170.104.53
+     Location: Poland, Toruń
+     Last check: 30 seconds ago
+
+User: /ping  
+Bot: 🏓 Pong! Bot is online and monitoring your VPN.
+
+User: hello
+Bot: 👋 Hello! I'm your VPN monitoring bot.
+     I received: hello
+     Use /help to see available commands.
+     
+     Available commands:
+     🏓 /ping - Test connectivity
+     📊 /status - Get VPN status  
+     ❓ /help - Show help
+```
+
+**Automatic Monitoring Alerts:**
+- **No Clients Alert**: Sent when no keepalive clients are reporting (every 5 minutes)
+- **VPN Disconnection**: Immediate alert when VPN connection is lost
+- **VPN Restoration**: Confirmation when VPN connection is restored
+- **DNS Leak Detection**: Automatic warnings when DNS leaks are detected
+
 ## 🛠️ Advanced Usage
 
 ### Container Communication
@@ -391,11 +438,47 @@ docker logs keepalive-client --tail 20
 #    🌐 VPN IP: 185.170.104.53
 #    🔒 DNS: PL (WAW) - No leak detected
 
+```bash
 # View keepalive server logs (isolated network)
 docker logs keepalive-server --tail 20
 
 # Check server status endpoint
 curl -s http://localhost:5421/status | jq
+
+# Monitor real-time activity
+docker compose logs -f keepalive-client keepalive-server
+```
+
+#### **📋 Log Pattern Recognition**
+
+**Keepalive Client Success Patterns:**
+```log
+✅ Keepalive sent successfully at [timestamp]
+📍 Location: Toruń, Kujawsko-Pomorskie, PL
+🌐 VPN IP: 185.170.104.53
+🔒 DNS: PL (WAW) - No leak detected
+⏳ Waiting 300 seconds until next keepalive...
+```
+
+**Keepalive Server Activity Patterns:**
+```log
+🌐 API Access: keepalive | IP: 10.51.0.1 | Auth: WITH_KEY | Status: 200_OK
+Keepalive received from synology-vpn-media - IP: 185.170.104.53
+✅ Telegram message sent successfully
+📥 Telegram command received: /status
+🔍 Monitoring check: 1 client(s) registered
+```
+
+**Telegram Bot Interaction Logs:**
+```log
+[timestamp] 📥 Telegram command received: /help
+[timestamp] ✅ Telegram message sent successfully  
+[timestamp] ✅ Help response sent
+[timestamp] 📥 Telegram command received: /ping
+[timestamp] ✅ Pong response sent
+[timestamp] 📥 Telegram command received: /status
+[timestamp] ✅ Status response sent
+```
 ```
 
 ### **🚨 Warning Signs to Watch For**
@@ -423,20 +506,143 @@ keepalive-client | 📍 Location: Unknown, Unknown, Unknown
 ```
 
 ### Troubleshooting
+
+#### 🔍 **Real-World Log Analysis**
+
+Based on actual deployment scenarios, here are common issues and their solutions:
+
+**📋 Checking System Status:**
+```bash
+# Check all container status
+docker compose ps
+
+# View real-time logs for specific services
+docker compose logs -f gluetun
+docker compose logs -f keepalive-client
+docker compose logs -f keepalive-server
+
+# Check recent logs with timestamps
+docker compose logs -t --tail=20 keepalive-client
+```
+
+#### 🚨 **Common Issue: DNS Leak Testing Mode Still Active**
+
+**Problem:** Keepalive client shows testing mode even after script updates:
+```log
+keepalive-client  | ⚠️  TESTING MODE: Simulating DNS leak - DNS location forced to US
+keepalive-client  | ❌ Failed to send keepalive to http://duevite.eu:5421
+```
+
+**Root Cause:** Container is running older version of the script despite file updates.
+
+**Solution:** Restart the keepalive-client container to pick up script changes:
+```bash
+# Restart specific container to reload scripts
+docker compose restart keepalive-client
+
+# Verify the fix - should show normal operation:
+docker compose logs -f keepalive-client
+```
+
+**Expected Output After Fix:**
+```log
+keepalive-client  | ✅ Keepalive sent successfully at [timestamp]
+keepalive-client  |    📍 Location: Toruń, Kujawsko-Pomorskie, PL
+keepalive-client  |    🌐 VPN IP: 185.170.104.53
+keepalive-client  |    🔒 DNS: PL (WAW) - No leak detected
+```
+
+#### 🌐 **Network Connectivity Issues**
+
+**Problem:** Keepalive client cannot reach server:
+```log
+keepalive-client  | ❌ Failed to send keepalive to http://duevite.eu:5421
+keepalive-client  | 📍 Location: Unknown, Unknown, Unknown
+```
+
+**Diagnostic Steps:**
+```bash
+# Test VPN connectivity from inside VPN network
+docker exec keepalive-client curl -s https://ipinfo.io/json
+
+# Test keepalive server connectivity
+docker exec keepalive-client curl -v http://duevite.eu:5421/status
+
+# Check if server is accessible from host
+curl -s http://localhost:5421/status
+```
+
+#### 📊 **Telegram Bot Verification**
+
+**Check Bot Functionality:**
+```bash
+# View server logs for Telegram activity
+docker compose logs keepalive-server | grep -i telegram
+
+# Expected successful patterns:
+# [timestamp] ✅ Telegram message sent successfully
+# [timestamp] 📥 Telegram command received: /status
+# [timestamp] ✅ Status response sent
+```
+
+**Test Bot Commands:**
+- Send `/ping` → Should receive "🏓 Pong!"
+- Send `/status` → Should receive current VPN status
+- Send `/help` → Should receive command list
+- Send any other text → Should receive friendly response with guidance to use /help
+
+#### 🔄 **Container Restart Sequence**
+
+**When containers fail to communicate:**
+```bash
+# Restart in proper order
+docker compose restart gluetun          # VPN gateway first
+sleep 10
+docker compose restart keepalive-client # Then monitoring
+docker compose restart keepalive-server # Server can restart anytime
+
+# Verify everything is working
+docker compose ps
+docker compose logs --tail=10 keepalive-client
+```
+
+#### 📈 **Success Indicators**
+
+**Healthy System Logs:**
+```log
+# Gluetun VPN:
+gluetun  | INFO [openvpn] Initialization Sequence Completed
+gluetun  | INFO [healthcheck] healthy!
+gluetun  | INFO [ip getter] Public IP address is 185.170.104.53 (Poland...)
+
+# Keepalive Client:
+keepalive-client  | ✅ Keepalive sent successfully
+keepalive-client  | 🔒 DNS: PL (WAW) - No leak detected
+
+# Keepalive Server:  
+keepalive-server  | Keepalive received from synology-vpn-media
+keepalive-server  | ✅ Telegram message sent successfully
+```
+
+#### 🛠️ **General Troubleshooting Commands**
+
 ```bash
 # Check container status
 docker compose ps
 
-# View logs
-docker compose logs gluetun
-docker compose logs qbittorrent
+# View logs for specific issues
+docker compose logs gluetun | grep -i error
+docker compose logs qbittorrent | grep -i fail
 
-# Restart VPN container
-docker compose restart gluetun
-
-# Check network connectivity
+# Test network connectivity
 docker exec gluetun ping 8.8.8.8
 docker exec qbittorrent curl -s https://ipinfo.io/json
+
+# Restart VPN container if connection issues
+docker compose restart gluetun
+
+# Full system restart (nuclear option)
+docker compose down && docker compose up -d
 ```
 
 ## 📁 Directory Structure
