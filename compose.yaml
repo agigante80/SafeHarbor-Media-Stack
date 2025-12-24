@@ -227,69 +227,48 @@ services:
     restart: unless-stopped
 
   # =============================================================================
-  # VPN MONITORING SYSTEM - Telegram notifications for VPN status
+  # VPN SENTINEL MONITORING - Telegram notifications for VPN status
+  # Using VPNSentinel: https://github.com/agigante80/VPNSentinel
   # =============================================================================
   
-  # VPN Status Monitor Client (routes through VPN)
-  keepalive-client:
-    image: curlimages/curl:latest
-    container_name: keepalive-client
+  # VPN Sentinel Client (monitors from inside VPN network)
+  vpn-sentinel-client:
+    image: agigante80/vpn-sentinel-client:latest
+    container_name: vpn-sentinel-client
     environment:
-      - KEEPALIVE_SERVER_URL=${KEEPALIVE_SERVER_URL}  # URL to reach monitoring server
-      - KEEPALIVE_CLIENT_ID=${KEEPALIVE_CLIENT_ID}    # Unique client identifier
-      - KEEPALIVE_API_KEY=${KEEPALIVE_API_KEY}        # API key for authentication
-      - TZ=${TZ}                                      # Timezone setting
-    volumes:
-      - ./keepalive-client/keepalive.sh:/tmp/keepalive.sh:ro  # Monitoring script
-    # DNS configuration for leak testing 
-    # To test DNS leak detection, uncomment the lines below:
-    # dns:
-    #   - 8.8.8.8          # Google DNS (US) - will cause DNS leak
-    #   - 8.8.4.4          # Google DNS (US) - will cause DNS leak
-    #   # Alternative test DNS servers:
-    #   # - 1.1.1.1        # Cloudflare DNS (may show different location)
-    #   # - 208.67.222.222 # OpenDNS (US-based)
-    #   # - 9.9.9.9        # Quad9 DNS (various locations)
-    network_mode: service:gluetun  # Routes through VPN to test connectivity
-    command: >
-      sh -c "
-      sleep 30 &&
-      echo 'Waiting for VPN connection...' &&
-      sleep 30 &&
-      echo 'Setting up keepalive script...' &&
-      mkdir -p /home/curl_user &&
-      cp /tmp/keepalive.sh /home/curl_user/keepalive.sh &&
-      chmod +x /home/curl_user/keepalive.sh &&
-      echo 'Starting keepalive client...' &&
-      exec /home/curl_user/keepalive.sh
-      "
+      - VPN_SENTINEL_SERVER_URL=http://vpn-sentinel-server:5000  # Internal server URL
+      - VPN_SENTINEL_API_KEY=${VPN_SENTINEL_API_KEY}             # API key for authentication
+      - VPN_SENTINEL_CLIENT_ID=${VPN_SENTINEL_CLIENT_ID:-safeharbor-media-stack}  # Unique client identifier
+      - VPN_SENTINEL_CHECK_INTERVAL=${VPN_SENTINEL_CHECK_INTERVAL:-300}  # Check interval in seconds (5 minutes)
+      - TZ=${TZ}                                                 # Timezone setting
+    network_mode: service:gluetun  # Routes through VPN to monitor connectivity
     depends_on:
-      - gluetun           # Needs VPN gateway
-      - keepalive-server  # Needs monitoring server
+      - gluetun                    # Needs VPN gateway
+      - vpn-sentinel-server        # Needs monitoring server
     restart: unless-stopped
 
-  # VPN Status Monitor Server (isolated - uses real IP for Telegram)
-  keepalive-server:
-    image: python:3.11-alpine
-    container_name: keepalive-server
+  # VPN Sentinel Server (isolated network - uses real IP for Telegram)
+  vpn-sentinel-server:
+    image: agigante80/vpn-sentinel-server:latest
+    container_name: vpn-sentinel-server
     ports:
-      - "5421:5000"  # External access for monitoring API
+      - "5421:5000"  # API server port
+      - "8080:8080"  # Web dashboard port (optional)
+      - "8081:8081"  # Health check port (optional)
     environment:
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}          # Telegram bot token for notifications
-      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}              # Your Telegram chat ID
-      - KEEPALIVE_API_KEY=${KEEPALIVE_API_KEY}            # API key for security
-      - MAX_REQUESTS_PER_MINUTE=${MAX_REQUESTS_PER_MINUTE} # Rate limiting setting
-      - TZ=${TZ}                                          # Timezone setting
-    volumes:
-      - ./keepalive-server/keepalive-server.py:/app/keepalive-server.py:ro  # Server script
-    working_dir: /app
+      - VPN_SENTINEL_API_KEY=${VPN_SENTINEL_API_KEY}                    # API key for security
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}                        # Telegram bot token for notifications
+      - VPN_SENTINEL_TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}               # Your Telegram chat ID
+      - VPN_SENTINEL_TELEGRAM_ENABLED=true                              # Enable Telegram notifications
+      - VPN_SENTINEL_SERVER_API_PORT=5000                               # API server port
+      - VPN_SENTINEL_SERVER_DASHBOARD_PORT=8080                         # Web dashboard port
+      - VPN_SENTINEL_SERVER_HEALTH_PORT=8081                            # Health check port
+      - VPN_SENTINEL_SERVER_WEB_DASHBOARD_ENABLED=true                  # Enable web dashboard
+      - VPN_SENTINEL_ALERT_THRESHOLD_MINUTES=${VPN_SENTINEL_ALERT_THRESHOLD_MINUTES:-15}  # Alert after X minutes of no contact
+      - VPN_SENTINEL_CHECK_INTERVAL_MINUTES=${VPN_SENTINEL_CHECK_INTERVAL_MINUTES:-5}     # Expected check interval
+      - TZ=${TZ}                                                        # Timezone setting
     networks:
-      - keepalive-isolated  # Isolated network (bypasses VPN)
-    command: >
-      sh -c "
-      pip install flask requests pytz &&
-      python keepalive-server.py
-      "
+      - vpn-sentinel-isolated  # Isolated network (bypasses VPN)
     restart: unless-stopped
 
 # =============================================================================
@@ -305,11 +284,11 @@ networks:
       config:
         - subnet: 10.50.0.0/16  # Internal subnet for media services
   
-  # Isolated network for monitoring server
+  # Isolated network for VPN Sentinel server
   # Bypasses VPN to send Telegram notifications via real IP  
-  keepalive-isolated:
+  vpn-sentinel-isolated:
     driver: bridge
-    name: keepalive-isolated  
+    name: vpn-sentinel-isolated  
     ipam:
       config:
         - subnet: 10.51.0.0/16  # Isolated subnet for monitoring
