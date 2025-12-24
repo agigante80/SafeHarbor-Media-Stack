@@ -13,7 +13,6 @@ radarr/
 readarr/
 bazarr/
 radarr_ES/
-wiki-content/
 
 # Logs
 *.log
