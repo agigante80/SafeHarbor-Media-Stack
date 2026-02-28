@@ -1,38 +1,142 @@
-# Environment files with sensitive information
+# ============================================================================
+# SENSITIVE INFORMATION - Never commit these
+# ============================================================================
+# Environment files with credentials and secrets
 .env
 .env.local
 .env.production
+.env.*.local
 
-# Docker volumes and data
+# Sensitive documentation
+docs/DEPLOYMENT_SECRETS.md
+
+# ============================================================================
+# DOCKER VOLUMES & RUNTIME DATA - Application state and data
+# ============================================================================
+# VPN Gateway - Contains server data and configurations
 gluetun/
-qbittorrent/
-jackett/
-prowlarr/
-sonarr/
-radarr/
-readarr/
-bazarr/
-radarr_ES/
+!gluetun/*.ovpn.example
+!gluetun/README.md
 
-# Logs
+# Download clients
+qbittorrent/
+!qbittorrent/README.md
+
+# Indexers
+jackett/
+!jackett/README.md
+prowlarr/
+!prowlarr/README.md
+
+# Media management (*arr apps)
+sonarr/
+!sonarr/README.md
+radarr/
+!radarr/README.md
+readarr/
+!readarr/README.md
+bazarr/
+!bazarr/README.md
+
+# ============================================================================
+# APPLICATION RUNTIME FILES - Process and state files
+# ============================================================================
+# PID files (process identifiers)
+*.pid
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite-*
+
+# Configuration files with potential secrets
+**/config.xml
+**/settings.json
+
+# Log files
 *.log
 logs/
+**/logs/
+**/*.log.*
 
-# Temporary files
+# Cache and temporary files
+**/cache/
+**/tmp/
+*.tmp
+*.cache
+
+# Backup and restore files
+**/backup/
+**/Backups/
+**/restore/
+*.backup
+*.bak
+*.old
+
+# Application specific
+**/MediaCover/
+**/Sentry/
+**/Definitions/
+
+# ============================================================================
+# DEVELOPMENT & EDITOR FILES
+# ============================================================================
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
+.project
+.settings/
 
-# Backup files
-*.backup
-*.bak
-compose.yaml.backup
-
-# Local configuration overrides
+# ============================================================================
+# DOCKER & COMPOSE OVERRIDES
+# ============================================================================
 docker-compose.override.yml
 compose.override.yaml
+compose.yaml.backup
 
-# Script outputs and cache
+# ============================================================================
+# DOWNLOAD DIRECTORIES - Media files not tracked
+# ============================================================================
+downloads/
+**/downloads/
+incomplete/
+**/incomplete/
+
+# ============================================================================
+# SCRIPTS & BUILD ARTIFACTS
+# ============================================================================
 command.bash
-*.cache
+*.pyc
+__pycache__/
+node_modules/
+
+# ============================================================================
+# QBITTORRENT SPECIFIC
+# ============================================================================
+# Torrent files and fast resume data
+qbittorrent/config/qBittorrent/BT_backup/*.torrent
+qbittorrent/config/qBittorrent/BT_backup/*.fastresume
+qbittorrent/config/qBittorrent/data/
+qbittorrent/config/qBittorrent/logs/
+
+# ============================================================================
+# GLUETUN SPECIFIC
+# ============================================================================
+# Generated server list (regenerated on start)
+gluetun/servers.json
+# Custom scripts (if temporary)
+gluetun/scripts/conntrack
+
+# ============================================================================
+# MISCELLANEOUS
+# ============================================================================
+# OS specific
+.Trash-*/
+.fuse_hidden*
+.nfs*radarr_ES/
