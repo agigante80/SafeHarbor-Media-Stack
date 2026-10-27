@@ -38,6 +38,10 @@ readarr/
 bazarr/
 !bazarr/README.md
 
+# Watch tracker (SQLite database + image cache)
+watcharr/
+!watcharr/README.md
+
 # ============================================================================
 # APPLICATION RUNTIME FILES - Process and state files
 # ============================================================================
@@ -140,3 +144,9 @@ gluetun/scripts/conntrack
 .Trash-*/
 .fuse_hidden*
 .nfs*radarr_ES/
+
+# Local backups and drafts made while editing on the NAS
+*.bak-*
+compose.yaml.new
+# Second Radarr instance (Spanish library): runtime config, like radarr/
+radarr_ES/

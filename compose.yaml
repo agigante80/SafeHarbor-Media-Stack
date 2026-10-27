@@ -24,6 +24,7 @@
 # - Radarr:       http://YOUR_SERVER_IP:9809
 # - Bazarr:       http://YOUR_SERVER_IP:9810
 # - Keepalive:    http://YOUR_SERVER_IP:5421
+# - Watcharr:     http://YOUR_SERVER_IP:3811  (NOT behind the VPN - see below)
 
 version: "3"
 
@@ -37,7 +38,7 @@ services:
     # - v3.41.0 and later: REQUIRE sysctls (see below) for Synology NAS
     # Breaking change occurred between v3.40.4 → v3.41.0
     image: qmcgaw/gluetun:v3.40.4  # Last version working without sysctls on Synology
-    container_name: gluetun
+    container_name: vpn-media-gluetun
     cap_add:
       - NET_ADMIN  # Required for VPN tunnel creation
     devices:
@@ -82,7 +83,7 @@ services:
   # BitTorrent Download Client
   qbittorrent:
     image: lscr.io/linuxserver/qbittorrent
-    container_name: qbittorrent
+    container_name: vpn-media-qbittorrent
     environment:
       - PUID=${PUID_MEDIA}       # User ID for file permissions
       - PGID=${PGID_MEDIA}       # Group ID for file permissions
@@ -90,8 +91,21 @@ services:
       - WEBUI_PORT=8085          # Internal web interface port
     volumes:
       - ${VOLUME_DOCKER_PROJECT}/qbittorrent/config:/config  # Configuration storage
-      - ${VOLUME_DOWNLOADS}:/downloads                       # Completed downloads
-      - ${VOLUME_INCOMPLETE}:/incomplete                     # Incomplete downloads
+      # USB-backed. Short-form binds AUTO-CREATE a missing host path, which on an
+      # unmounted drive means downloading onto the 2.3G root partition. These
+      # long-form binds fail to start instead.
+      # NOTE this is a backstop, not a guarantee: it only catches a MISSING path.
+      # An empty leftover directory still satisfies it.
+      - type: bind
+        source: ${VOLUME_DOWNLOADS}                          # Completed downloads
+        target: /downloads
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${VOLUME_INCOMPLETE}                         # Incomplete downloads
+        target: /incomplete
+        bind:
+          create_host_path: false
     network_mode: service:gluetun  # Share Gluetun's VPN network stack
     depends_on:
       - gluetun
@@ -100,13 +114,15 @@ services:
   # Cloudflare Bypass Service
   flaresolverr:
     image: ghcr.io/flaresolverr/flaresolverr:latest
-    container_name: flaresolverr
+    container_name: vpn-media-flaresolverr
     environment:
       - PUID=${PUID_MEDIA}      # User ID for file permissions
       - PGID=${PGID_MEDIA}      # Group ID for file permissions
       - TZ=${TZ}                # Timezone setting
       - TEST_URL=${TEST_URL}    # URL for connectivity testing
       - LANG=${LANG}            # Language setting
+    volumes:
+      - ${VOLUME_DOCKER_PROJECT}/flaresolverr/config:/config
     network_mode: service:gluetun  # Share Gluetun's VPN network stack
     depends_on:
       - gluetun
@@ -115,7 +131,7 @@ services:
   # Torrent Indexer Proxy
   jackett:
     image: lscr.io/linuxserver/jackett:latest
-    container_name: jackett
+    container_name: vpn-media-jackett
     environment:
       - PUID=${PUID_MEDIA}
       - PGID=${PGID_MEDIA}
@@ -134,7 +150,7 @@ services:
   # Indexer Manager (Modern Jackett Alternative)
   prowlarr:
     image: lscr.io/linuxserver/prowlarr:latest
-    container_name: prowlarr
+    container_name: vpn-media-prowlarr
     environment:
       - PUID=${PUID_MEDIA}
       - PGID=${PGID_MEDIA}
@@ -149,15 +165,28 @@ services:
   # TV Show Automation (*arr Applications)
   sonarr:
     image: lscr.io/linuxserver/sonarr:latest
-    container_name: sonarr
+    container_name: vpn-media-sonarr
     environment:
       - PUID=${PUID_MEDIA}
       - PGID=${PGID_MEDIA}
       - TZ=${TZ}
     volumes:
       - ${VOLUME_DOCKER_PROJECT}/sonarr/config:/config
-      - ${VOLUME_DOWNLOADS}:/downloads
-      - ${VOLUME_MEDIA}:/media/media
+      # USB-backed — refuse to start rather than auto-create on the root partition.
+      - type: bind
+        source: ${VOLUME_DOWNLOADS}
+        target: /downloads
+        bind:
+          create_host_path: false
+      # /volume1/media is a SEPARATE btrfs subvolume (dev 39 vs /volume1's 38), so it CAN be
+      # absent independently of /volume1. Guarded, so a missing path makes the container
+      # fail to start rather than silently import completed downloads into an
+      # auto-created stub.
+      - type: bind
+        source: ${VOLUME_MEDIA}
+        target: /media/media
+        bind:
+          create_host_path: false
     network_mode: service:gluetun
     depends_on:
       - gluetun
@@ -166,15 +195,28 @@ services:
   # Movie Automation
   radarr:
     image: lscr.io/linuxserver/radarr:latest
-    container_name: radarr
+    container_name: vpn-media-radarr
     environment:
       - PUID=${PUID_MEDIA}
       - PGID=${PGID_MEDIA}
       - TZ=${TZ}
     volumes:
       - ${VOLUME_DOCKER_PROJECT}/radarr/config:/config
-      - ${VOLUME_DOWNLOADS}:/downloads
-      - ${VOLUME_MEDIA}:/media/media
+      # USB-backed — refuse to start rather than auto-create on the root partition.
+      - type: bind
+        source: ${VOLUME_DOWNLOADS}
+        target: /downloads
+        bind:
+          create_host_path: false
+      # /volume1/media is a SEPARATE btrfs subvolume (dev 39 vs /volume1's 38), so it CAN be
+      # absent independently of /volume1. Guarded, so a missing path makes the container
+      # fail to start rather than silently import completed downloads into an
+      # auto-created stub.
+      - type: bind
+        source: ${VOLUME_MEDIA}
+        target: /media/media
+        bind:
+          create_host_path: false
     network_mode: service:gluetun
     depends_on:
       - gluetun
@@ -203,14 +245,22 @@ services:
   # Subtitle Automation
   bazarr:
     image: lscr.io/linuxserver/bazarr:latest
-    container_name: bazarr
+    container_name: vpn-media-bazarr
     environment:
       - PUID=${PUID_MEDIA}
       - PGID=${PGID_MEDIA}
       - TZ=${TZ}
     volumes:
       - ${VOLUME_DOCKER_PROJECT}/bazarr/config:/config
-      - ${VOLUME_MEDIA}:/media/media
+      # Guarded like sonarr/radarr. It MUST be: a short-form bind here would
+      # auto-create an empty /volume1/media, which then satisfies their
+      # create_host_path:false check and lets them import into the stub - the
+      # guard would be defeated by its own sibling.
+      - type: bind
+        source: ${VOLUME_MEDIA}
+        target: /media/media
+        bind:
+          create_host_path: false
     network_mode: service:gluetun
     depends_on:
       - gluetun
@@ -222,7 +272,7 @@ services:
   vpn-sentinel-client:
     image: agigante80/vpn-sentinel-client:latest
     network_mode: service:gluetun  # Shares VPN network
-    container_name: vpn-sentinel-client
+    container_name: vpn-media-sentinel-client
     environment:
       # Required: Server connection
       - VPN_SENTINEL_URL=${VPN_SENTINEL_URL}
@@ -234,8 +284,47 @@ services:
       - TZ=${TZ}
       # Optional: Health check intervals
       - HEALTH_CHECK_INTERVAL=300  # seconds
+    # Shares gluetun's network namespace, so it CANNOT start before gluetun
+    # exists. Without this, a cold `up -d` can schedule the VPN alerting client
+    # first and it fails to start exactly when you most want alerts.
+    depends_on:
+      - gluetun
     restart: unless-stopped
-  
+    # Off Synology's `db` log driver (heavy btrfs metadata writes; its log lock can leak and wedge dockerd).
+    logging:
+      driver: local
+      options:
+        max-size: "1m"
+        max-file: "2"
+
+  # =============================================================================
+  # WATCH TRACKER - Self-hosted Trakt replacement (movies/TV/anime/games)
+  # =============================================================================
+  # Deliberately NOT network_mode: service:gluetun. Publishing its port would
+  # mean adding it to gluetun's `ports:`, and gluetun cannot be recreated
+  # without stranding every container in its network namespace. There is also nothing to hide
+  # here: it talks to TMDB and Trakt, both of which behave worse from a shared
+  # VPN exit IP (rate limits, Cloudflare challenges). Sitting on
+  # media-internal instead means it survives VPN reconnects and can be added
+  # or updated with `up -d --no-deps watcharr` without touching the stack.
+  watcharr:
+    # Pinned: watchtower is running on this host, and Watcharr ships breaking
+    # changes often enough that an unattended jump to :latest is a bad trade.
+    # Check https://github.com/sbondCo/Watcharr/releases before bumping.
+    image: ghcr.io/sbondco/watcharr:v4.2.1
+    container_name: vpn-media-watcharr
+    ports:
+      - 3811:3080  # Web UI
+    volumes:
+      # SQLite database + image cache. On volume1, not the USB drive, so this
+      # is not one of the create_host_path:false guarded services.
+      - ${VOLUME_DOCKER_PROJECT}/watcharr/data:/data
+    environment:
+      - TZ=${TZ}
+    networks:
+      - media-internal
+    restart: unless-stopped
+
 # =============================================================================
 # NETWORK CONFIGURATION - Custom networks for proper isolation
 # =============================================================================

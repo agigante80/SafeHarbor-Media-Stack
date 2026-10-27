@@ -186,7 +186,7 @@ See the [Gluetun GitHub repository](https://github.com/qdm12/gluetun) for the co
 
 ## 📦 Stack Components
 
-### Core Services (9 Containers)
+### Core Services (10 Containers)
 
 | Service | Purpose | Port | Notes |
 |---------|---------|------|-------|
@@ -199,6 +199,7 @@ See the [Gluetun GitHub repository](https://github.com/qdm12/gluetun) for the co
 | **[Prowlarr](https://prowlarr.com/)** | Indexer Manager | 9805 | Unified indexer management |
 | **[Jackett](https://github.com/Jackett/Jackett)** | Indexer Proxy | 9803 | Additional indexer support |
 | **[FlareSolverr](https://github.com/FlareSolverr/FlareSolverr)** | Cloudflare Bypass | 9806 | For protected sites |
+| **[Watcharr](https://github.com/sbondCo/Watcharr)** | Watch tracker (self-hosted Trakt) | 3811 | **Not** behind Gluetun, see compose.yaml |
 
 ### Optional Service
 
@@ -451,21 +452,21 @@ FlareSolverr: http://localhost:8191
 
 ```bash
 # Check current VPN IP
-docker exec gluetun wget -qO- https://ipinfo.io/ip
+docker exec vpn-media-gluetun wget -qO- https://ipinfo.io/ip
 
 # Get detailed location information
-docker exec gluetun wget -qO- https://ipinfo.io/json
+docker exec vpn-media-gluetun wget -qO- https://ipinfo.io/json
 
 # DNS leak test (VPN country should match DNS country)
-VPN_COUNTRY=$(docker exec gluetun wget -qO- https://ipinfo.io/json | grep country | cut -d'"' -f4)
-DNS_COUNTRY=$(docker exec gluetun wget -qO- https://1.1.1.1/cdn-cgi/trace | grep '^loc=' | cut -d'=' -f2)
+VPN_COUNTRY=$(docker exec vpn-media-gluetun wget -qO- https://ipinfo.io/json | grep country | cut -d'"' -f4)
+DNS_COUNTRY=$(docker exec vpn-media-gluetun wget -qO- https://1.1.1.1/cdn-cgi/trace | grep '^loc=' | cut -d'=' -f2)
 echo "VPN: $VPN_COUNTRY | DNS: $DNS_COUNTRY"
 
 # View real-time VPN logs
-docker logs gluetun --follow
+docker logs vpn-media-gluetun --follow
 
 # Check Gluetun health
-docker exec gluetun wget -qO- http://localhost:9999/health
+docker exec vpn-media-gluetun wget -qO- http://localhost:9999/health
 ```
 
 ### VPN Sentinel Status
@@ -511,11 +512,11 @@ docker compose logs gluetun | grep -iE 'error|warn'
 docker compose logs qbittorrent --tail 20
 
 # Test VPN connectivity
-docker exec gluetun wget -qO- https://ipinfo.io/ip
+docker exec vpn-media-gluetun wget -qO- https://ipinfo.io/ip
 
 # Test container communication
-docker exec sonarr curl -s http://localhost:9696  # Prowlarr
-docker exec sonarr curl -s http://localhost:8085  # qBittorrent
+docker exec vpn-media-sonarr curl -s http://localhost:9696  # Prowlarr
+docker exec vpn-media-sonarr curl -s http://localhost:8085  # qBittorrent
 ```
 
 ### Common Issues
@@ -523,7 +524,7 @@ docker exec sonarr curl -s http://localhost:8085  # qBittorrent
 **1. VPN Not Connecting**
 - Check VPN credentials in `.env`
 - Verify `VPN_SERVICE_PROVIDER` is correct
-- Check Gluetun logs: `docker logs gluetun`
+- Check Gluetun logs: `docker logs vpn-media-gluetun`
 - Try a different VPN server country
 
 **2. Services Not Accessible**
@@ -578,7 +579,7 @@ docker compose logs -f
 
 ### Getting Help
 
-1. Check Gluetun logs: `docker logs gluetun --tail 50`
+1. Check Gluetun logs: `docker logs vpn-media-gluetun --tail 50`
 2. Check VPN Sentinel logs if using: `docker logs vpn-sentinel-client`
 3. Verify `.env` configuration (especially VPN credentials)
 4. Test VPN connectivity outside Docker first
@@ -642,6 +643,28 @@ tar -xzf backup-20260228.tar.gz
 ```
 
 ## 🔐 Synology-Specific Configuration
+
+### Downloads on an external drive
+
+If DSM has not mounted the drive when the containers start, a short-form bind
+(`- /volumeUSB1/usbshare/downloads:/downloads`) silently **creates** the missing path on
+the small DSM system partition, and downloads fill it. **compose.yaml** therefore binds
+every such path in long form with `create_host_path: false`, so a missing path makes the
+container fail to start instead. This only catches a *missing* path: an empty leftover
+directory still passes.
+
+### Container logs: the `local` driver
+
+Synology's Container Manager defaults to its `db` log driver, which writes heavily to
+btrfs metadata and can leak its log lock, after which `docker inspect`/`stop` hang until
+a DSM reboot. Services here set `logging: driver: local` with size caps.
+
+### Upgrading: container names changed
+
+Every container is now prefixed `vpn-media-` (`gluetun` → `vpn-media-gluetun`, etc.).
+After pulling, `docker compose up -d` creates new containers under the new names; remove
+the old ones (`docker rm -f gluetun qbittorrent ...`) and update any scripts, health
+checks or reverse-proxy rules that used the old names.
 
 ### Recommended Synology Settings
 
